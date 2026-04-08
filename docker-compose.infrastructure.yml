@@ -8,7 +8,6 @@ services:
     ports:
       - "5672:5672"  # AMQP
       - "15672:15672"  # Management UI
-      - "9419:9419"  # Prometheus metrics (for exporter)
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-app}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-secure_password}
