@@ -44,7 +44,7 @@ else
     echo -e "${GREEN}✓ No hardcoded passwords found${NC}"
 fi
 echo
-n
+
 # Test 3: Validate health checks are defined
 echo -e "${YELLOW}[TEST 3] Checking health checks...${NC}"
 HEALTH_CHECKS=$(grep -c "healthcheck:" "$COMPOSE_FILE" || echo "0")
@@ -131,7 +131,7 @@ fi
 echo
 
 # Test 9: Check services network configuration
-echo -e "${YELLOW}[TEST 9] Checking network configuration...${NC}}
+echo -e "${YELLOW}[TEST 9] Checking network configuration...${NC}"
 NETWORK_SECTIONS=$(grep -c "networks:" "$COMPOSE_FILE" || echo "0")
 NETWOR_DEFINITIONS=$(grep -A5 "networks:" "$COMPOSE_FILE" | grep -c "driver:" || echo "0")
 echo "Found $NETWORK_SECTIONS network configurations with $NETWOR_DEFINITIONS driver definitions"
