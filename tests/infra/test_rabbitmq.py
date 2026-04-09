@@ -8,7 +8,20 @@ import subprocess
 import asyncio
 import aio_pika
 
-RABBITMQ_CONTAINER_NAME = "rabbitmq"
+def get_container_name(service_name):
+    """Get the full container name for a docker-compose service."""
+    try:
+        # This command gets the ID of the running service container
+        command = f"docker-compose -f docker-compose.infrastructure.yml ps -q {service_name}"
+        container_id = subprocess.check_output(command, shell=True, text=True).strip()
+        if not container_id:
+            pytest.fail(f"Could not find a running container for service '{service_name}'")
+        return container_id
+    except subprocess.CalledProcessError as e:
+        pytest.fail(f"Error getting container ID for '{service_name}': {e.stderr}")
+
+
+RABBITMQ_CONTAINER_NAME = get_container_name("rabbitmq")
 
 
 def run_command(command):
@@ -34,7 +47,7 @@ def run_command(command):
 @pytest.fixture(scope="module")
 def rabbitmq_is_healthy():
     """Fixture to ensure RabbitMQ is healthy before running tests."""
-    command = f"docker ps --filter 'name={RABBITMQ_CONTAINER_NAME}' --format '{{{{.Status}}}}'"
+    command = f"docker ps --filter 'id={RABBITMQ_CONTAINER_NAME}' --format '{{{{.Status}}}}'"
     status = run_command(command)
     if "healthy" not in status:
         pytest.fail("RabbitMQ container is not healthy.")
