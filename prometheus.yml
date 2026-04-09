@@ -9,6 +9,18 @@ global:
 
 # Scrape configurations for infrastructure services
 scrape_configs:
+  - job_name: 'ingestion-upload'
+    static_configs:
+      - targets: ['ingestion-upload:8000']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  - job_name: 'airflow'
+    static_configs:
+      - targets: ['airflow:9100']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
   # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:

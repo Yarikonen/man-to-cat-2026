@@ -1,33 +1,16 @@
+version: '3.8'
+
 services:
   ingestion-upload:
-    container_name: ingestion-upload
     build: ./ingestion-upload
     ports:
       - "8000:8000"
     environment:
-      MINIO_ENDPOINT: "minio:9000"
-      MINIO_ACCESS_KEY: "${MINIO_ROOT_USER:-minioadmin}"
-      MINIO_SECRET_KEY: "${MINIO_ROOT_PASSWORD:-minioadmin}"
-      BUCKET_NAME: "dataset"
-      LOG_LEVEL: "INFO"
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
     networks:
       - infra_network
-    depends_on:
-      minio:
-        condition: service_healthy
-    restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          cpus: "0.5"
-          memory: 512M
-        limits:
-          cpus: "1.0"
-          memory: 1G
 
-  # airflow is not part of this wave, but is included in the full plan
-  # for future waves. I will add it here to follow the plan's structure
-  # for the full docker-compose.ingestion.yml, but it will be a stub.
   airflow:
     container_name: airflow
     build:
@@ -57,25 +40,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    command: bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname Admin --role Admin --email admin@example.com || true && airflow webserver --port 8080 & airflow scheduler"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+    command: bash -c "airflow db migrate && airflow users create --username admin --password admin --email admin@example.com --firstname Admin --lastname Admin --role Admin && airflow webserver --port 8080 & airflow scheduler"
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          cpus: "1.0"
-          memory: 1G
-        limits:
-          cpus: "2.0"
-          memory: 2G
 
-networks:
-  infra_network:
-    driver: bridge
-    name: infra_network
-    external: true

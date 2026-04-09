@@ -6,4 +6,5 @@ opencv-python-headless==4.10.0.84
 structlog==24.4.0
 pydantic-settings
 uvicorn
-python-multipart
+prometheus-client
+aio_pika==9.5.0
