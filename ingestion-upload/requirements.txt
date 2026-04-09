@@ -1,11 +1,9 @@
 fastapi==0.115.6
-uvicorn==0.33.0
-pydantic==2.10.4
-pydantic-settings==2.7.1
-boto3==1.35.90
+aiofiles
+boto3
 aioboto3==13.2.0
 opencv-python-headless==4.10.0.84
 structlog==24.4.0
-aio-pika==9.5.0
-httpx==0.28.1
-python-multipart==0.0.19
+pydantic-settings
+uvicorn
+python-multipart

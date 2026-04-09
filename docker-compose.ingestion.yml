@@ -1,0 +1,81 @@
+services:
+  ingestion-upload:
+    container_name: ingestion-upload
+    build: ./ingestion-upload
+    ports:
+      - "8000:8000"
+    environment:
+      MINIO_ENDPOINT: "minio:9000"
+      MINIO_ACCESS_KEY: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_SECRET_KEY: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+      BUCKET_NAME: "dataset"
+      LOG_LEVEL: "INFO"
+    networks:
+      - infra_network
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  # airflow is not part of this wave, but is included in the full plan
+  # for future waves. I will add it here to follow the plan's structure
+  # for the full docker-compose.ingestion.yml, but it will be a stub.
+  airflow:
+    container_name: airflow
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://app:secure_password@postgres:5432/man2cat
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://app:secure_password@postgres:5432/man2cat
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+      AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: 600
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+    networks:
+      - infra_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname Admin --role Admin --email admin@example.com || true && airflow webserver --port 8080 & airflow scheduler"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+        limits:
+          cpus: "2.0"
+          memory: 2G
+
+networks:
+  infra_network:
+    driver: bridge
+    name: infra_network
+    external: true

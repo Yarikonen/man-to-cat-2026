@@ -4,7 +4,6 @@ services:
   # Message Queue
   rabbitmq:
     image: rabbitmq:3.13-management
-    container_name: rabbitmq
     ports:
       - "5672:5672"  # AMQP
       - "15672:15672"  # Management UI
@@ -36,7 +35,6 @@ services:
   # RabbitMQ Exporter for Prometheus
   rabbitmq-exporter:
     image: kbudde/rabbitmq-exporter:latest
-    container_name: rabbitmq-exporter
     environment:
       RABBIT_URL: http://rabbitmq:15672
       RABBIT_USER: ${RABBITMQ_USER:-app}
@@ -54,9 +52,8 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password}
@@ -86,7 +83,6 @@ services:
   # PostgreSQL Exporter for Prometheus
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
-    container_name: postgres-exporter
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-secure_password}@postgres:5432/${POSTGRES_DB:-man2cat}?sslmode=disable"
       PG_EXPORTER_EXTEND_QUERY_PATH: /etc/postgres_exporter/queries.yaml
@@ -105,7 +101,6 @@ services:
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: redis
     ports:
       - "6379:6379"
     volumes:
@@ -133,7 +128,6 @@ services:
   # Redis Exporter for Prometheus
   redis-exporter:
     image: oliver006/redis_exporter:latest
-    container_name: redis-exporter
     environment:
       REDIS_ADDR: redis:6379
       REDIS_EXPORTER_CHECK_STREAMS: "deduplication,semaphore"
@@ -148,8 +142,7 @@ services:
 
   # MinIO (S3-compatible storage)
   minio:
-    image: minio/minio:RELEASE.2024-12-13T07-45-01Z
-    container_name: minio
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
     ports:
       - "9000:9000"  # API
       - "9001:9001"  # Console
@@ -184,7 +177,6 @@ services:
   # Prometheus
   prometheus:
     image: prom/prometheus:v3.0.1
-    container_name: prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -214,7 +206,6 @@ services:
   # Grafana
   grafana:
     image: grafana/grafana:11.4.0
-    container_name: grafana
     ports:
       - "3000:3000"
     environment:
