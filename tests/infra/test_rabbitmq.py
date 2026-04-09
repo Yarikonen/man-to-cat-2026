@@ -25,9 +25,8 @@ def run_command(command):
         print(f"Stdout: {result.stdout}")
         print(f"Stderr: {result.stderr}")
         pytest.fail(
-            f"Command failed with exit code {result.returncode}: {command}
-"
-            f"Stderr: {result.stderr}"
+            f"Command failed with exit code {result.returncode}: {command}"
+            f" Stderr: {result.stderr}"
         )
     return result.stdout.strip()
 
