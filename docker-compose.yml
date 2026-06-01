@@ -1,0 +1,219 @@
+version: "3.9"
+
+services:
+  # ─── PostgreSQL ─────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: man-to-cat-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: man_to_cat
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d man_to_cat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── pgExporter (Prometheus metrics for PostgreSQL) ─────────────
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: man-to-cat-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://app:app@postgres:5432/man_to_cat?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app_network
+    ports:
+      - "9187:9187"
+
+  # ─── Telegram Bot ───────────────────────────────────────────────
+  bot:
+    build:
+      context: .
+      dockerfile: bot/Dockerfile
+    container_name: man-to-cat-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://app:app@postgres:5432/man_to_cat
+      - PROMETHEUS_PORT=8000
+      - MODEL_SERVICE_PORT=8002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_network
+    ports:
+      - "8001:8000"
+
+  # ─── Model Service (Worker) ─────────────────────────────────────
+  model_service:
+    build:
+      context: .
+      dockerfile: model_service/Dockerfile
+    container_name: man-to-cat-model-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://app:app@postgres:5432/man_to_cat
+      - MODEL_SERVICE_PORT=8002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app_network
+    ports:
+      - "8002:8002"
+
+  # ─── MinIO (S3-compatible storage) ─────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: man-to-cat-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    networks:
+      - app_network
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis (Queue) ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: man-to-cat-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - app_network
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis Exporter (Prometheus metrics for Redis) ──────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: man-to-cat-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - app_network
+    ports:
+      - "9121:9121"
+
+  # ─── cAdvisor (Container metrics for Prometheus) ────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: man-to-cat-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - app_network
+    ports:
+      - "8080:8080"
+
+  # ─── Prometheus (Metrics collection) ────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: man-to-cat-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    depends_on:
+      - cadvisor
+      - redis-exporter
+    networks:
+      - app_network
+    ports:
+      - "9090:9090"
+
+  # ─── Grafana (Dashboards) ───────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: man-to-cat-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    networks:
+      - app_network
+    ports:
+      - "3000:3000"
+
+# ─── Volumes ────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  minio_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# ─── Networks ───────────────────────────────────────────────────────
+networks:
+  app_network:
+    driver: bridge
+    name: man-to-cat-network

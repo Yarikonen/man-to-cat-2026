@@ -1,0 +1,182 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Processing Duration by Stage",
+      "description": "Average time spent in each processing stage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(image_processing_duration_seconds_sum[5m]) / rate(image_processing_duration_seconds_count[5m])",
+          "legendFormat": "{{stage}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "table", "placement": "bottom" }
+      }
+    },
+    {
+      "title": "Images in Queue",
+      "description": "Current number of images waiting for processing",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "images_in_queue",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Processing Rate",
+      "description": "Cumulative images processed by final status",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "images_processed_total",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": {
+        "graphMode": "area",
+        "textMode": "value"
+      }
+    },
+    {
+      "title": "Images by Status (Active)",
+      "description": "Images currently in non-final statuses",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "images_in_status",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 15 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      }
+    },
+    {
+      "title": "Container CPU Usage",
+      "description": "CPU usage per container from cAdvisor",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(container_cpu_usage_seconds_total{name=~\"bot|model-service\"}[2m])",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0
+        }
+      }
+    },
+    {
+      "title": "Container Memory Usage",
+      "description": "Memory RSS per container from cAdvisor",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "container_memory_rss{name=~\"bot|model-service\"}",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0
+        }
+      }
+    },
+    {
+      "title": "Processing Duration Distribution",
+      "description": "Histogram of processing durations by stage",
+      "type": "heatmap",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "rate(image_processing_duration_seconds_bucket[5m])",
+          "legendFormat": "{{le}}s",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "tags": ["image-processing", "man-to-cat"],
+  "templating": { "list": [] },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Image Processing Dashboard",
+  "uid": "image-processing",
+  "version": 0
+}

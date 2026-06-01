@@ -1,0 +1,41 @@
+"""Application configuration via environment variables."""
+
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    # Telegram
+    telegram_bot_token: str = ""
+
+    # MinIO / S3
+    minio_endpoint: str = "minio:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket_originals: str = "originals"
+    minio_bucket_processed: str = "processed"
+    minio_secure: bool = False
+
+    # Redis
+    redis_url: str = "redis://redis:6379/0"
+    redis_queue_name: str = "image_processing_queue"
+
+    # PostgreSQL
+    database_url: str = "postgresql://app:app@postgres:5432/man_to_cat"
+
+    # Monitoring
+    prometheus_port: int = 8000
+
+    # Model service
+    model_service_port: int = 8002
+
+    class Config:
+        env_file = ".env"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Return cached Settings instance."""
+    return Settings()
