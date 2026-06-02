@@ -76,15 +76,17 @@ class DatabaseManager:
         image_id: str,
         user_id: int,
         original_s3_key: str,
+        telegram_message_id: Optional[int] = None
     ) -> None:
         """Create a new image record with a pre-determined UUID."""
-        await self._insert_record(image_id, user_id, original_s3_key)
+        await self._insert_record(image_id, user_id, original_s3_key, telegram_message_id)
 
     async def _insert_record(
         self,
         image_id: str,
         user_id: int,
         original_s3_key: str,
+        telegram_message_id: Optional[int] = None
     ) -> None:
         """Insert a new image record."""
         assert self._pool is not None
@@ -92,9 +94,9 @@ class DatabaseManager:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO images "
-                "(id, user_id, original_s3_key, status, created_at, updated_at) "
-                "VALUES ($1::uuid, $2, $3, 'received', $4, $5)",
-                image_id, user_id, original_s3_key, now, now,
+                "(id, user_id, original_s3_key, status, telegram_message_id, created_at, updated_at) "
+                "VALUES ($1::uuid, $2, $3, 'received', $4, $5, $6)",
+                image_id, user_id, original_s3_key, telegram_message_id, now, now,
             )
 
     async def update_status(
@@ -196,3 +198,22 @@ class DatabaseManager:
                 list(FINAL_STATUSES),
             )
             return [dict(row) for row in rows]
+
+    async def get_not_sent_final_images(self):
+        assert self._pool is not None
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM images "
+                "WHERE status = ANY($1::text[]) and final_status_sent_at IS NULL "
+                "ORDER BY created_at ASC",
+                list(FINAL_STATUSES),
+            )
+            return [dict(row) for row in rows]
+
+    async def update_final_image_sent(self, image_id: str):
+        assert self._pool is not None
+        now = self._now()
+        query = f"UPDATE images SET updated_at = $1, final_status_sent_at = $1 WHERE id = $2::uuid"
+
+        async with self._pool.acquire() as conn:
+            await conn.execute(query, now, image_id)

@@ -107,8 +107,6 @@ def _register(
         photo = message.photo[-1]
         file_id = photo.file_id
 
-        await message.answer("⬇️ Downloading your image...")
-
         try:
             # Download the image from Telegram
             file = await message.bot.get_file(file_id)
@@ -119,18 +117,6 @@ def _register(
             s3_key = f"{image_id}.jpg"
             s3.upload_image(s3_key, image_data.read())
 
-            # Create DB record with the same UUID
-            # Override the auto-generated id in create_image_record
-            # by directly inserting with our UUID
-            await db.create_image_record_with_id(
-                image_id=image_id,
-                user_id=user_id,
-                original_s3_key=s3_key,
-            )
-
-            # Push to queue
-            queue.enqueue(image_id)
-
             # Send acknowledgment
             sent = await message.answer(
                 f"✅ <b>Image accepted!</b>\n\n"
@@ -138,12 +124,18 @@ def _register(
                 f"Status: {_format_status('received')}"
             )
 
-            # Store message ID for status updates
-            await db.update_status(
+            # Create DB record with the same UUID
+            # Override the auto-generated id in create_image_record
+            # by directly inserting with our UUID
+            await db.create_image_record_with_id(
                 image_id=image_id,
-                status="received",
-                telegram_message_id=sent.message_id,
+                user_id=user_id,
+                original_s3_key=s3_key,
+                telegram_message_id=sent.message_id
             )
+
+            # Push to queue
+            queue.enqueue(image_id)
 
             logger.info(
                 "Image %s accepted from user %d", image_id, user_id

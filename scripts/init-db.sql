@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS images (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     started_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ
+    completed_at TIMESTAMPTZ,
+    final_status_sent_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_images_user_id ON images (user_id);

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from aiogram.types import BufferedInputFile
 
-from shared.db import DatabaseManager, FINAL_STATUSES
+from shared.db import DatabaseManager
 from shared.metrics import IMAGES_BY_STATUS
 from shared.s3_client import S3Client
 
@@ -65,28 +65,27 @@ class StatusPoller:
 
             if last_status != current_status:
                 self._tracked[image_id] = current_status
-                await self._notify_status_change(
-                    user_id=user_id,
-                    message_id=message_id,
-                    image=image,
-                    new_status=current_status,
-                )
+                if current_status != 'received':
+                    await self._notify_status_change(
+                        user_id=user_id,
+                        message_id=message_id,
+                        image=image,
+                        new_status=current_status,
+                    )
 
         # Check for images that transitioned to final status
-        finished_ids = [
-            iid for iid, status in self._tracked.items()
-            if status in FINAL_STATUSES and iid not in {
-                img["id"] for img in active_images
-            }
-        ]
-        for image_id in finished_ids:
-            image = await self._db.get_image(image_id)
+        finished_images = await self._db.get_not_sent_final_images()
+        for image in finished_images:
             if image:
                 if image["status"] == "done":
                     await self._send_done(image)
                 elif image["status"] == "failed":
                     await self._send_failed(image)
-            del self._tracked[image_id]
+
+                await self._db.update_final_image_sent(image_id=image['id'])
+
+            if image['id'] in self._tracked:
+                del self._tracked[image['id']]
 
     async def _notify_status_change(
         self,
