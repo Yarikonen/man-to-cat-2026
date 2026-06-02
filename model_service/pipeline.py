@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import logging
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from shared.db import DatabaseManager
 from shared.s3_client import S3Client
@@ -17,6 +17,7 @@ from shared.metrics import (
 )
 from model_service.modules.preprocessing import PreprocessingModule
 from model_service.modules.quality_gate import QualityGateModule
+from model_service.modules.style_selector import StyleSelectorModule
 from model_service.modules.primary_model import PrimaryModelModule
 from model_service.modules.postprocessing import PostprocessingModule
 
@@ -47,7 +48,8 @@ class Pipeline:
         self._s3 = s3
         self._preprocessing = PreprocessingModule()
         self._quality_gate = QualityGateModule()
-        self._primary_model = PrimaryModelModule()
+        self._style_selector = StyleSelectorModule(s3)
+        self._primary_model = PrimaryModelModule(s3)
         self._postprocessing = PostprocessingModule()
 
     async def process(self, image_id: str) -> None:
@@ -66,43 +68,55 @@ class Pipeline:
 
             original_key: str = image_record["original_s3_key"]
 
-            # Stage 1: Preprocessing
-            await self._db.update_status(image_id, "preprocessing")
-            with _stage_timer("preprocessing"):
-                image_bytes = self._s3.download_image(original_key)
-                tensor = self._preprocessing.process(image_bytes)
-            # Data-level metric: input resolution (H, W, C layout)
-            if tensor.dim() == 3:
-                h, w = tensor.shape[0], tensor.shape[1]
-                INPUT_MEGAPIXELS.observe((h * w) / 1_000_000)
-            logger.info("Stage 1 complete: preprocessing for %s", image_id)
-
-            # Stage 2: Quality Gate
+            # Stage 1: Preprocessing — decode bytes to PIL Image
             await self._db.update_status(image_id, "quality_check")
             with _stage_timer("quality_check"):
-                should_process, reason = self._quality_gate.check(tensor)
-            if not should_process:
-                reason_text = reason or "Image did not pass quality check"
+                image_bytes = self._s3.download_image(original_key)
+                pil_image = self._preprocessing.bytes_to_pil(image_bytes)
+
+                logger.info("Stage 1 complete: preprocessing for %s", image_id)
+
+                # Stage 2: Quality Gate — size, blur, YOLO person detection, crop
+
+                result = self._quality_gate.check(pil_image)
+
+            if not result.passed:
+                reason_text = result.reason or "Image did not pass quality check"
                 await self._db.update_status(
                     image_id, "failed", error_reason=reason_text
                 )
                 PROCESSED_TOTAL.labels(status="failed").inc()
-                QUALITY_REJECTIONS.labels(reason=reason or "unspecified").inc()
+                QUALITY_REJECTIONS.labels(reason=reason_text or "unspecified").inc()
                 logger.info(
                     "Image %s rejected by quality gate: %s",
                     image_id,
                     reason_text,
                 )
                 return
+
+            cropped_image = result.cropped_image
             logger.info("Stage 2 complete: quality check for %s", image_id)
 
-            # Stage 3: Primary Model Inference
+            # Stage 3: Style select
+            await self._db.update_status(image_id, "style_select")
+            with _stage_timer("style_select"):
+                cat_path = self._style_selector.get_style(cropped_image)
+
+                cat_bytes = self._s3.download_image(cat_path, raw=True)
+                cat_image = self._preprocessing.bytes_to_pil(cat_bytes)
+
+            logger.info("Stage 3 complete: style select model for %s, selected cat %s", image_id, cat_path)
+
+            # Stage 4: Primary Model Inference — convert cropped image to tensor, run model
             await self._db.update_status(image_id, "processing")
             with _stage_timer("processing"):
-                output_tensor = self._primary_model.infer(tensor)
-            logger.info("Stage 3 complete: primary model for %s", image_id)
+                human_tensor = self._preprocessing.pil_to_tensor(cropped_image)
+                cat_tensor = self._preprocessing.pil_to_tensor(cat_image)
+                output_tensor = self._primary_model.infer(human_tensor, cat_tensor)
 
-            # Stage 4: Postprocessing
+            logger.info("Stage 4 complete: primary model for %s", image_id)
+
+            # Stage 5: Postprocessing — convert tensor back to PIL Image
             await self._db.update_status(image_id, "postprocessing")
             with _stage_timer("postprocessing"):
                 final_image = self._postprocessing.process(output_tensor)

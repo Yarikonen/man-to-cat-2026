@@ -160,7 +160,7 @@ class StatusPoller:
 
         text = (
             f"❌ <b>Processing Failed</b>\n\n"
-            f"ID: <code>{image['id'][:8]}...</code>\n"
+            f"ID: <code>{str(image['id'])[:8]}...</code>\n"
             f"Reason: <i>{error_reason}</i>\n\n"
             f"Please try again with a different image."
         )
@@ -188,6 +188,7 @@ class StatusPoller:
             "received": "📥",
             "preprocessing": "⚙️",
             "quality_check": "🔍",
+            "style_select": "🎨",
             "processing": "🧠",
             "postprocessing": "🎨",
             "done": "✅",

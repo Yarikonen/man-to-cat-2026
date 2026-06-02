@@ -25,6 +25,7 @@ STATUS_EMOJI = {
     "received": "📥",
     "preprocessing": "⚙️",
     "quality_check": "🔍",
+    "style_select": "🎨",
     "processing": "🧠",
     "postprocessing": "🎨",
     "done": "✅",

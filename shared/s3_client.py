@@ -33,6 +33,8 @@ class S3Client:
         )
         self._bucket_originals = settings.minio_bucket_originals
         self._bucket_processed = settings.minio_bucket_processed
+        self._bucket_raw = settings.minio_bucket_raw
+        self._bucket_model = settings.minio_bucket_model
 
     def ensure_buckets(self) -> None:
         """Create required buckets if they don't exist."""
@@ -59,12 +61,15 @@ class S3Client:
         logger.info("Uploaded to s3://%s/%s", bucket, key)
 
     def download_image(
-        self, key: str, processed: bool = False
+        self, key: str, processed: bool = False, raw: bool = False
     ) -> bytes:
         """Download image bytes from S3."""
-        bucket = (
-            self._bucket_processed if processed else self._bucket_originals
-        )
+        if processed:
+            bucket = self._bucket_processed
+        elif raw:
+            bucket = self._bucket_raw
+        else:
+            bucket = self._bucket_originals
         response = self._client.get_object(Bucket=bucket, Key=key)
         return response["Body"].read()
 
@@ -81,6 +86,10 @@ class S3Client:
             ExpiresIn=expires_in,
         )
         return url
+
+    def get_model_weights(self, key: str):
+        response = self._client.get_object(Bucket=self._bucket_model, Key=key)
+        return io.BytesIO(response["Body"].read())
 
     @property
     def bucket_originals(self) -> str:

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import torch
+import numpy as np
 from PIL import Image
 
 logger = logging.getLogger(__name__)
@@ -38,29 +38,8 @@ class PostprocessingModule:
         )
 
         try:
-            # Handle different tensor layouts
-            if tensor.dim() == 3:
-                if tensor.shape[0] in (1, 3, 4):
-                    # (C, H, W) -> (H, W, C)
-                    tensor = tensor.permute(1, 2, 0)
-                array = tensor.cpu().numpy().astype("uint8")
-            else:
-                raise ValueError(
-                    f"Unexpected tensor dimensions: {tensor.dim()}"
-                )
-
-            if array.shape[2] == 1:
-                array = array.squeeze(axis=2)
-                mode = "L"
-            elif array.shape[2] == 3:
-                mode = "RGB"
-            elif array.shape[2] == 4:
-                mode = "RGBA"
-            else:
-                mode = "RGB"
-                array = array[:, :, :3]
-
-            return Image.fromarray(array, mode=mode)
+            img = ((tensor[0].detach().numpy().transpose(1, 2, 0) + 1.0) * 127.5).astype(np.uint8)
+            return Image.fromarray(img, mode="RGB")
 
         except Exception as exc:
             raise ValueError(
