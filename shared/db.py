@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS images (
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     started_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ
+    completed_at TIMESTAMPTZ,
+    final_status_sent_at TIMESTAMPTZ
 );
 """
 
@@ -29,6 +30,12 @@ CREATE_INDEXES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_images_user_id ON images (user_id);",
     "CREATE INDEX IF NOT EXISTS idx_images_status ON images (status);",
     "CREATE INDEX IF NOT EXISTS idx_images_user_status ON images (user_id, status);",
+]
+
+# Additive migrations for databases created before a column existed.
+# Safe to run on every startup (IF NOT EXISTS).
+MIGRATIONS_SQL = [
+    "ALTER TABLE images ADD COLUMN IF NOT EXISTS final_status_sent_at TIMESTAMPTZ;",
 ]
 
 
@@ -57,6 +64,8 @@ class DatabaseManager:
             await conn.execute(CREATE_TABLE_SQL)
             for index_sql in CREATE_INDEXES_SQL:
                 await conn.execute(index_sql)
+            for migration_sql in MIGRATIONS_SQL:
+                await conn.execute(migration_sql)
 
     @staticmethod
     def _now() -> datetime:

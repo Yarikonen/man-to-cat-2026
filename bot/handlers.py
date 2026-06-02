@@ -7,6 +7,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 from aiogram import Router, F
+from aiogram.enums import ChatType
 from aiogram.filters import Command
 from aiogram.types import Message
 
@@ -44,6 +45,10 @@ def _register(
     queue: QueueManager,
 ) -> None:
     """Register all handlers on the given router."""
+
+    # Only handle private chats (DMs). Messages in groups/supergroups —
+    # e.g. the dedicated Alertmanager alert chat — are ignored entirely.
+    router.message.filter(F.chat.type == ChatType.PRIVATE)
 
     @router.message(Command("start"))
     async def cmd_start(message: Message) -> None:

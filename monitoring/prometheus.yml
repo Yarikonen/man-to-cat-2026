@@ -2,6 +2,17 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# Alerting rules across the 3 monitoring levels (data / model / system).
+# Rules are evaluated by Prometheus and visible at http://localhost:9090/alerts.
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+# Route firing alerts to Alertmanager, which forwards them to Telegram.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   - job_name: "prometheus"
     static_configs:
@@ -34,3 +45,8 @@ scrape_configs:
     static_configs:
       - targets: ["minio:9000"]
     metrics_path: /minio/v2/metrics/cluster
+
+  # GPU metrics — target is down until the `gpu` compose profile is enabled.
+  - job_name: "gpu"
+    static_configs:
+      - targets: ["gpu-exporter:9835"]

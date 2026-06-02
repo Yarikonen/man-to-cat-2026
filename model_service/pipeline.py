@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Optional
 
 from shared.db import DatabaseManager
 from shared.s3_client import S3Client
-from shared.metrics import PROCESSING_DURATION, PROCESSED_TOTAL
+from shared.metrics import (
+    PROCESSING_DURATION,
+    PROCESSED_TOTAL,
+    QUALITY_REJECTIONS,
+    INPUT_MEGAPIXELS,
+)
 from model_service.modules.preprocessing import PreprocessingModule
 from model_service.modules.quality_gate import QualityGateModule
 from model_service.modules.primary_model import PrimaryModelModule
@@ -66,6 +71,10 @@ class Pipeline:
             with _stage_timer("preprocessing"):
                 image_bytes = self._s3.download_image(original_key)
                 tensor = self._preprocessing.process(image_bytes)
+            # Data-level metric: input resolution (H, W, C layout)
+            if tensor.dim() == 3:
+                h, w = tensor.shape[0], tensor.shape[1]
+                INPUT_MEGAPIXELS.observe((h * w) / 1_000_000)
             logger.info("Stage 1 complete: preprocessing for %s", image_id)
 
             # Stage 2: Quality Gate
@@ -78,6 +87,7 @@ class Pipeline:
                     image_id, "failed", error_reason=reason_text
                 )
                 PROCESSED_TOTAL.labels(status="failed").inc()
+                QUALITY_REJECTIONS.labels(reason=reason or "unspecified").inc()
                 logger.info(
                     "Image %s rejected by quality gate: %s",
                     image_id,

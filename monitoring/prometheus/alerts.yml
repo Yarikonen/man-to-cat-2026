@@ -1,0 +1,117 @@
+groups:
+  # ─── Уровень 3: Система (доступность, латентность, ошибки, ресурсы) ───
+  - name: system
+    rules:
+      - alert: ModelServiceDown
+        expr: up{job="model_service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          level: system
+        annotations:
+          summary: "Воркер model_service недоступен"
+          description: "Prometheus не может собрать метрики model_service > 1 мин. Очередь не разбирается."
+          runbook: "R1"
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(images_processed_total{status="failed"}[5m]))
+          /
+          clamp_min(sum(rate(images_processed_total[5m])), 0.0001) > 0.3
+        for: 5m
+        labels:
+          severity: critical
+          level: system
+        annotations:
+          summary: "Высокая доля ошибок обработки (>30%)"
+          description: "Более 30% изображений за 5 мин завершаются статусом failed."
+          runbook: "R2"
+
+      - alert: HighProcessingLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(image_processing_duration_seconds_bucket{stage="processing"}[5m]))
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+          level: system
+        annotations:
+          summary: "p95 инференса > 30с"
+          description: "95-й перцентиль времени стадии инференса превышает 30с 10 мин подряд."
+          runbook: "R3"
+
+      - alert: QueueBacklog
+        expr: images_in_queue > 20
+        for: 5m
+        labels:
+          severity: warning
+          level: system
+        annotations:
+          summary: "Очередь изображений переполняется (>20)"
+          description: "В очереди Redis >20 изображений 5 мин — пропускная способность ниже входящего потока."
+          runbook: "R4"
+
+  # ─── Уровень 1: Данные (свежесть, качество, дрейф входа) ───────────
+  - name: data
+    rules:
+      - alert: NoFreshData
+        expr: |
+          (sum(increase(images_processed_total[30m])) == 0)
+          and on() (up{job="bot"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+          level: data
+        annotations:
+          summary: "30 мин нет обработанных изображений"
+          description: "Бот жив, но за 30 мин ничего не обработано — застрял пайплайн или прервался поток данных (свежесть)."
+          runbook: "R5"
+
+      - alert: HighQualityRejectRate
+        expr: |
+          sum(rate(quality_gate_rejections_total[15m]))
+          /
+          clamp_min(sum(rate(images_processed_total[15m])), 0.0001) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+          level: data
+        annotations:
+          summary: "Quality gate отбраковывает >50% входа"
+          description: "Растущая доля брака на входе — деградация качества данных или дрейф распределения входных изображений."
+          runbook: "R6"
+
+  # ─── Уровень 2: Модель (распределение предсказаний, уверенность) ────
+  - name: model
+    rules:
+      - alert: LowModelConfidence
+        expr: |
+          histogram_quantile(
+            0.5,
+            sum by (le) (rate(model_clip_similarity_bucket[30m]))
+          ) < 0.18
+        for: 15m
+        labels:
+          severity: warning
+          level: model
+        annotations:
+          summary: "Низкая уверенность модели (медиана CLIP-похожести < 0.18)"
+          description: "Медиана CLIP-похожести вход↔ближайший кот упала — входы не похожи на галерею котов; вероятен дрейф или мусорный вход, качество результата падает."
+          runbook: "R7"
+
+      - alert: ModelConfidenceCollapse
+        expr: |
+          histogram_quantile(
+            0.9,
+            sum by (le) (rate(model_clip_similarity_bucket[30m]))
+          ) < 0.1
+        for: 15m
+        labels:
+          severity: critical
+          level: model
+        annotations:
+          summary: "Коллапс распределения предсказаний модели"
+          description: "Даже p90 CLIP-похожести < 0.1 — подбор стиля деградировал (битый индекс эмбеддингов / не та модель CLIP / пустая галерея)."
+          runbook: "R8"

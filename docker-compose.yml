@@ -158,6 +158,26 @@ services:
     ports:
       - "8080:8080"
 
+  # ─── GPU Exporter (NVIDIA metrics) ──────────────────────────────
+  # Opt-in: requires an NVIDIA GPU + nvidia-container-toolkit on the host.
+  # Start with:  docker compose --profile gpu up -d
+  gpu-exporter:
+    image: utkuozdemir/nvidia_gpu_exporter:1.2.0
+    container_name: man-to-cat-gpu-exporter
+    restart: unless-stopped
+    profiles: ["gpu"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu", "utility"]
+    networks:
+      - app_network
+    ports:
+      - "9835:9835"
+
   # ─── Prometheus (Metrics collection) ────────────────────────────
   prometheus:
     image: prom/prometheus:latest
@@ -165,6 +185,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -173,10 +194,38 @@ services:
     depends_on:
       - cadvisor
       - redis-exporter
+      - alertmanager
     networks:
       - app_network
     ports:
       - "9090:9090"
+
+  # ─── Alertmanager (routes alerts to Telegram) ───────────────────
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: man-to-cat-alertmanager
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.tmpl.yml:/etc/alertmanager/alertmanager.tmpl.yml:ro
+      - alertmanager_data:/alertmanager
+    # Alertmanager can't expand env vars in its config, so render the template
+    # from $TELEGRAM_BOT_TOKEN / $TELEGRAM_ALERT_CHAT_ID at startup, then exec.
+    # ($$ keeps the vars for the container shell instead of Compose interpolation.)
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        sed -e "s|__BOT_TOKEN__|$$TELEGRAM_BOT_TOKEN|" \
+            -e "s|__CHAT_ID__|$$TELEGRAM_ALERT_CHAT_ID|" \
+            /etc/alertmanager/alertmanager.tmpl.yml > /tmp/alertmanager.yml
+        exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
+    networks:
+      - app_network
+    ports:
+      - "9093:9093"
 
   # ─── Grafana (Dashboards) ───────────────────────────────────────
   grafana:
@@ -210,6 +259,8 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  alertmanager_data:
     driver: local
 
 # ─── Networks ───────────────────────────────────────────────────────
