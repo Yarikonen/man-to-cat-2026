@@ -26,7 +26,7 @@ _PERSON_CLASS = 0
 
 # Thresholds
 _MIN_SIDE = 128
-_BLUR_THRESHOLD = 100.0  # Laplacian variance — lower = blurrier
+_BLUR_THRESHOLD = 20.0  # Laplacian variance — lower = blurrier
 _MIN_PERSON_CONFIDENCE = 0.80
 _MIN_BBOX_AREA_RATIO = 0.50
 
